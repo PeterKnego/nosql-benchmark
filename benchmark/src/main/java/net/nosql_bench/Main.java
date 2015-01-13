@@ -44,27 +44,27 @@ public class Main {
 			return;
 		}
 
-		int insertCount = 100_000;
-		int queryCount = 100;
+		int insertCount = 1_000_000;
+		int queryCount = 1000;
 		threads = 4;
 
-		setup(test, props);
-		System.out.println("Starting inserts..");
+		setup(test, props, true);
+//		System.out.println("Starting inserts..");
 		long insertDuration = insert(test, insertCount, threads);
 		System.out.println("Starting queries..");
 		long queryDuration = query(test, queryCount, threads);
 
-		System.out.println("Inserts bench: count=" + insertCount + " duration=" + insertDuration + " rate=" + (insertCount / insertDuration));
-		System.out.println("Queries bench: count=" + queryCount + " duration=" + queryDuration + " rate=" + (queryCount / queryDuration));
+		System.out.println("Inserts bench: count=" + insertCount + " duration=" + insertDuration + " rate=" + ((1000 * insertCount) / insertDuration));
+		System.out.println("Queries bench: count=" + queryCount + " duration=" + queryDuration + " rate=" + ((1000 * queryCount) / queryDuration));
 	}
 
-	public static void setup(final DbTest test, Properties props) {
+	public static void setup(final DbTest test, Properties props, boolean dropExisting) {
 		test.init(props);
 		List<FieldDefinition> fieldDef = new ArrayList<>();
-		fieldDef.add(new FieldDefinition("number", FieldDefinition.FIELD_TYPE.LONG, FieldDefinition.INDEX_TYPE.RANGE));
-		fieldDef.add(new FieldDefinition("text", FieldDefinition.FIELD_TYPE.STRING, FieldDefinition.INDEX_TYPE.FULLTEXT));
+		fieldDef.add(new FieldDefinition("number", FieldDefinition.FIELD_TYPE.INTEGER, FieldDefinition.INDEX_TYPE.RANGE));
+		fieldDef.add(new FieldDefinition("text", FieldDefinition.FIELD_TYPE.STRING, FieldDefinition.INDEX_TYPE.RANGE));
 
-		test.register("BenchTest", fieldDef);
+		test.register("BenchTest", fieldDef, dropExisting);
 	}
 
 	public static long insert(final DbTest test, final int count, final int threads) {
@@ -78,7 +78,7 @@ public class Main {
 		long start = System.currentTimeMillis();
 		executor.start();
 		executor.getResults();
-		return (System.currentTimeMillis() - start) / 1000;
+		return (System.currentTimeMillis() - start);
 	}
 
 	public static class InsertTask implements Callable<List<Void>> {
@@ -105,7 +105,7 @@ public class Main {
 
 				Map<String, Object> fields = new HashMap<>(2);
 				fields.put("number", Tester.randomInt());
-				fields.put("text", Tester.randomWord() + " " + Tester.randomWord() + " " + Tester.randomWord());
+				fields.put("text", Tester.randomWord());
 
 				test.insert("BenchTest", fields);
 				int total = totalCount.addAndGet(1);
@@ -132,7 +132,7 @@ public class Main {
 		long start = System.currentTimeMillis();
 		executor.start();
 		executor.getResults();
-		return (System.currentTimeMillis() - start) / 1000;
+		return (System.currentTimeMillis() - start);
 	}
 
 	public static class QueryTask implements Callable<List<Void>> {
@@ -151,14 +151,16 @@ public class Main {
 
 		@Override
 		public List<Void> call() throws Exception {
+			long begin = System.currentTimeMillis();
 			long start = System.currentTimeMillis();
 			for (int i = 0; i < countInThread; i++) {
 				List<QueryPredicate> predicates = new ArrayList<QueryPredicate>(1);
-				predicates.add(new QueryPredicate("text", QueryPredicate.OPERATOR.LIKE, Tester.randomWord()));
+				predicates.add(new QueryPredicate("text", QueryPredicate.OPERATOR.EQUALS, Tester.randomWord()));
 				int res = test.querySimple("BenchTest", predicates);
-				double duration = (System.currentTimeMillis() - start) / 1000;
+				double duration = (System.currentTimeMillis() - start);
 				if (printStatus) {
-					System.out.println("query " + Thread.currentThread().getName() + " " + i + " dur:" + duration + " results:" + res);
+					System.out.println("query " + Thread.currentThread().getName() + " " + i + " dur:" + duration
+							+ " time:" + (System.currentTimeMillis() - begin) + " results:" + res);
 				}
 				start = System.currentTimeMillis();
 			}

@@ -2,7 +2,7 @@ package net.nosql_bench;
 
 public class FieldDefinition {
 
-	public enum FIELD_TYPE {STRING, LONG, DOUBLE}
+	public enum FIELD_TYPE {STRING, LONG, INTEGER, DOUBLE, SHORT, BYTE}
 	public enum INDEX_TYPE {SINGLE, RANGE, FULLTEXT}
 
 	public String fieldName;

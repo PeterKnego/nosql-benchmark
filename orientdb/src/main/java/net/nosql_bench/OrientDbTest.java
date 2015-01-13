@@ -14,6 +14,7 @@ import com.orientechnologies.orient.core.metadata.schema.OType;
 import com.orientechnologies.orient.core.record.impl.ODocument;
 import com.orientechnologies.orient.core.sql.query.OSQLSynchQuery;
 
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -41,9 +42,9 @@ public class OrientDbTest extends DbTest {
 	}
 
 	@Override
-	public void register(String tableName, List<FieldDefinition> fields) {
+	public void register(String tableName, List<FieldDefinition> fields, boolean dropExisting) {
 		OClass oldCls = schema.getClass(tableName);
-		if (oldCls != null) {
+		if (dropExisting && oldCls != null) {
 			schema.dropClass(tableName);
 		}
 		OClass cls = schema.createClass(tableName);
@@ -108,7 +109,9 @@ public class OrientDbTest extends DbTest {
 		ODatabaseDocument db = threadInit();
 
 		StringBuilder queryString = new StringBuilder("select * from " + tableName + " where ");
-		for (QueryPredicate predicate : predicates) {
+		Iterator<QueryPredicate> iterator = predicates.iterator();
+		while (iterator.hasNext()) {
+			QueryPredicate predicate = iterator.next();
 			queryString.append(predicate.fieldName);
 			switch (predicate.operator) {
 				case EQUALS:
@@ -136,7 +139,12 @@ public class OrientDbTest extends DbTest {
 					throw new IllegalStateException("Unknown query operator: " + predicate.operator);
 			}
 
+			if (iterator.hasNext()) {
+				queryString.append(" and");
+			}
 		}
+
+		System.out.println("Query string: " + queryString.toString());
 
 		List<ODocument> res = db.query(new OSQLSynchQuery<>(queryString.toString()));
 		return res.size();
@@ -164,8 +172,14 @@ public class OrientDbTest extends DbTest {
 				return OType.STRING;
 			case LONG:
 				return OType.LONG;
+			case INTEGER:
+				return OType.INTEGER;
 			case DOUBLE:
 				return OType.DOUBLE;
+			case SHORT:
+				return OType.SHORT;
+			case BYTE:
+				return OType.BYTE;
 			default:
 				throw new IllegalArgumentException("Unknown field type: " + fieldDefinition.fieldType);
 		}

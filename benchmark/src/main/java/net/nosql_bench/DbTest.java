@@ -10,7 +10,7 @@ public abstract class DbTest {
 
 	public abstract void init(Properties props);
 
-	public abstract void register(String tableName, List<FieldDefinition> fields);
+	public abstract void register(String tableName, List<FieldDefinition> fields, boolean dropExisting);
 
 	public abstract void finish();
 
