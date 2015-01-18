@@ -27,15 +27,15 @@ public class OrientDbTest extends DbTest {
 	@Override
 	public void init(Properties props) {
 		this.properties = props;
-		ODatabase db = new ODatabaseDocumentTx(properties.getProperty("orientdb.database"))
-				.open(properties.getProperty("orientdb.username"), properties.getProperty("orientdb.password"));
+		ODatabase db = new ODatabaseDocumentTx(properties.getProperty("database"))
+				.open(properties.getProperty("username"), properties.getProperty("password"));
 		schema = db.getMetadata().getSchema();
 	}
 
 	private ODatabaseDocument threadInit() {
 		if (!ODatabaseRecordThreadLocal.INSTANCE.isDefined()) {
-			ODatabaseDocumentInternal db = new ODatabaseDocumentTx(properties.getProperty("orientdb.database"))
-					.open(properties.getProperty("orientdb.username"), properties.getProperty("orientdb.password"));
+			ODatabaseDocumentInternal db = new ODatabaseDocumentTx(properties.getProperty("database"))
+					.open(properties.getProperty("username"), properties.getProperty("password"));
 			ODatabaseRecordThreadLocal.INSTANCE.set(db);
 		}
 		return ODatabaseRecordThreadLocal.INSTANCE.get();
@@ -47,10 +47,12 @@ public class OrientDbTest extends DbTest {
 		if (dropExisting && oldCls != null) {
 			schema.dropClass(tableName);
 		}
-		OClass cls = schema.createClass(tableName);
+		OClass cls = schema.getOrCreateClass(tableName);
 		for (FieldDefinition field : fields) {
-			cls.createProperty(field.fieldName, translateFieldType(field));
-			cls.createIndex(tableName + "." + field.fieldName, translateIndexType(field), field.fieldName);
+			if (!cls.existsProperty(field.fieldName)) {
+				cls.createProperty(field.fieldName, translateFieldType(field));
+				cls.createIndex(tableName + "." + field.fieldName, translateIndexType(field), field.fieldName);
+			}
 		}
 	}
 

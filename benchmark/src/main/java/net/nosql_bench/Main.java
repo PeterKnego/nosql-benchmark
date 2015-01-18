@@ -1,171 +1,75 @@
 package net.nosql_bench;
 
+import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
-import java.util.*;
-import java.util.concurrent.Callable;
-import java.util.concurrent.atomic.AtomicInteger;
+import java.io.InputStream;
+import java.util.Properties;
 
 public class Main {
-
-	public static String dbClass = "net.nosql_bench.OrientDbTest";
-
 	public static void main(String[] args) {
-		if (args.length != 1 && args.length != 2 && args.length != 3) {
-			System.out.println("Wrong arguments, must be: <orient|arango|aerospike> threads properties_path");
+
+		if (args.length != 2) {
+			System.out.println("Wrong arguments, must be: db_name_or_properties_path workload_name_or_properties_path");
 			return;
 		}
 
-		final String db = args[0];
-		int threads = args.length >= 2 ? Integer.valueOf(args[1]) : 1;
 		System.out.println("Working Directory = " + System.getProperty("user.dir"));
 
-		final String propertiesPath = args.length == 3 ? args[2] : "./bench.properties";
+		final String dbPropertiesPath = args[0];
+		final String workloadPropertiesPath = args[1];
 
-		Properties props = new Properties();
-
+		Properties workloadProperties = new Properties();
 		try {
-			props.load(new FileInputStream(propertiesPath));
+			InputStream propertiesStream = Main.class.getResourceAsStream("/workloads/"+workloadPropertiesPath+".properties");
+			if (propertiesStream == null){
+				propertiesStream = new FileInputStream(workloadPropertiesPath);
+			}
+			workloadProperties.load(propertiesStream);
 		} catch (IOException e) {
 			e.printStackTrace();
 			return;
 		}
 
-		DbTest test;
-		if (db.equals("orientdb")) {
-			try {
-				test = (DbTest) Main.class.getClassLoader().loadClass(dbClass).newInstance();
-			} catch (InstantiationException | ClassNotFoundException | IllegalAccessException e) {
-				e.printStackTrace();
-				return;
+		Properties dbProperties = new Properties();
+		try {
+			InputStream propertiesStream = Main.class.getResourceAsStream("/"+dbPropertiesPath+".properties");
+			if (propertiesStream == null){
+				propertiesStream = new FileInputStream(dbPropertiesPath);
 			}
-		} else {
-			System.out.println("Unknown database: " + db);
+			dbProperties.load(propertiesStream);
+		} catch (IOException e) {
+			e.printStackTrace();
 			return;
 		}
 
-		int insertCount = 1_000_000;
-		int queryCount = 1000;
-		threads = 4;
-
-		setup(test, props, true);
-//		System.out.println("Starting inserts..");
-		long insertDuration = insert(test, insertCount, threads);
-		System.out.println("Starting queries..");
-		long queryDuration = query(test, queryCount, threads);
-
-		System.out.println("Inserts bench: count=" + insertCount + " duration=" + insertDuration + " rate=" + ((1000 * insertCount) / insertDuration));
-		System.out.println("Queries bench: count=" + queryCount + " duration=" + queryDuration + " rate=" + ((1000 * queryCount) / queryDuration));
-	}
-
-	public static void setup(final DbTest test, Properties props, boolean dropExisting) {
-		test.init(props);
-		List<FieldDefinition> fieldDef = new ArrayList<>();
-		fieldDef.add(new FieldDefinition("number", FieldDefinition.FIELD_TYPE.INTEGER, FieldDefinition.INDEX_TYPE.RANGE));
-		fieldDef.add(new FieldDefinition("text", FieldDefinition.FIELD_TYPE.STRING, FieldDefinition.INDEX_TYPE.RANGE));
-
-		test.register("BenchTest", fieldDef, dropExisting);
-	}
-
-	public static long insert(final DbTest test, final int count, final int threads) {
-
-		ScenarioExecutor<Void> executor = new ScenarioExecutor<Void>(threads);
-
-		for (int n = 1; n <= threads; n++) {
-			executor.addTask(new InsertTask(test, count / threads, n == 1));
-		}
-
-		long start = System.currentTimeMillis();
-		executor.start();
-		executor.getResults();
-		return (System.currentTimeMillis() - start);
-	}
-
-	public static class InsertTask implements Callable<List<Void>> {
-
-		public InsertTask(DbTest test, int countInThread, boolean printStatus) {
-			this.test = test;
-			this.countInThread = countInThread;
-			this.printStatus = printStatus;
-		}
-
-		private static AtomicInteger totalCount = new AtomicInteger(0);
-
-		private int countInThread;
-		private boolean printStatus;
-		private DbTest test;
-
-		@Override
-		public List<Void> call() throws Exception {
-
-			long start = System.currentTimeMillis() - 1;
-			double curTime = start;
-
-			for (int i = 0; i < countInThread; i++) {
-
-				Map<String, Object> fields = new HashMap<>(2);
-				fields.put("number", Tester.randomInt());
-				fields.put("text", Tester.randomWord());
-
-				test.insert("BenchTest", fields);
-				int total = totalCount.addAndGet(1);
-
-				if (printStatus && i % 1000 == 0) {
-					double duration = (System.currentTimeMillis() - start) / 1000;
-					double lastDur = (System.currentTimeMillis() - curTime) / 1000.0;
-					curTime = System.currentTimeMillis();
-					System.out.println("insert " + Thread.currentThread().getName() + " " + total + " dur:" + duration + "  avg_rate:" + (int) (total / duration) + "  cur_rate:" + (int) (1000.0 / lastDur));
-				}
+		Workload workload;
+		try {
+			String className = workloadProperties.getProperty("class");
+			if (className == null) {
+				System.out.println("Error: property 'class' not defined in workload.properties ");
+				return;
 			}
+			workload = (Workload) Main.class.getClassLoader().loadClass(className).newInstance();
 
-			return null;
-		}
-	}
-
-	public static long query(final DbTest test, final int count, final int threads) {
-
-		ScenarioExecutor<Void> executor = new ScenarioExecutor<Void>(threads);
-
-		for (int n = 1; n <= threads; n++) {
-			executor.addTask(new QueryTask(test, count / threads, true));
-		}
-		long start = System.currentTimeMillis();
-		executor.start();
-		executor.getResults();
-		return (System.currentTimeMillis() - start);
-	}
-
-	public static class QueryTask implements Callable<List<Void>> {
-
-		public QueryTask(DbTest test, int countInThread, boolean printStatus) {
-			this.test = test;
-			this.countInThread = countInThread;
-			this.printStatus = printStatus;
+		} catch (ClassNotFoundException | InstantiationException | IllegalAccessException e) {
+			System.out.println(e.getMessage());
+			return;
 		}
 
-		private static AtomicInteger totalCount = new AtomicInteger(0);
-
-		private int countInThread;
-		private boolean printStatus;
-		private DbTest test;
-
-		@Override
-		public List<Void> call() throws Exception {
-			long begin = System.currentTimeMillis();
-			long start = System.currentTimeMillis();
-			for (int i = 0; i < countInThread; i++) {
-				List<QueryPredicate> predicates = new ArrayList<QueryPredicate>(1);
-				predicates.add(new QueryPredicate("text", QueryPredicate.OPERATOR.EQUALS, Tester.randomWord()));
-				int res = test.querySimple("BenchTest", predicates);
-				double duration = (System.currentTimeMillis() - start);
-				if (printStatus) {
-					System.out.println("query " + Thread.currentThread().getName() + " " + i + " dur:" + duration
-							+ " time:" + (System.currentTimeMillis() - begin) + " results:" + res);
-				}
-				start = System.currentTimeMillis();
+		DbTest test;
+		try {
+			String className = dbProperties.getProperty("class");
+			if (className == null) {
+				System.out.println("Error: property 'class' not defined in database properties: " + dbPropertiesPath);
+				return;
 			}
-			return null;
+			test = (DbTest) Main.class.getClassLoader().loadClass(className).newInstance();
+		} catch (InstantiationException | ClassNotFoundException | IllegalAccessException e) {
+			System.out.println(e.getMessage());
+			return;
 		}
-	}
 
+		workload.execute(test, dbProperties, workloadProperties);
+	}
 }
