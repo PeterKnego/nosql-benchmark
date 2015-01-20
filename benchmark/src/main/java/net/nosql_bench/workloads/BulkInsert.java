@@ -18,7 +18,7 @@ public class BulkInsert implements Workload {
 
 		int count = PropsUtil.expandInt(workloadProperties.getProperty("insert.count"));
 
-		setup(test, dbProperties, true);
+		setup(test, dbProperties);
 
 		System.out.println("Starting inserts..");
 		long insertDuration = insert(test, count, threads);
@@ -30,7 +30,7 @@ public class BulkInsert implements Workload {
 	}
 
 
-	public void setup(final DbTest test, Properties props, boolean dropExisting) {
+	public void setup(final DbTest test, Properties props) {
 		test.init(props);
 		List<FieldDefinition> fieldDef = new ArrayList<>();
 		fieldDef.add(new FieldDefinition("number", FieldDefinition.FIELD_TYPE.INTEGER, FieldDefinition.INDEX_TYPE.RANGE));

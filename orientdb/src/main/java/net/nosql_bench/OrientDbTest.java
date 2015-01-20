@@ -14,10 +14,7 @@ import com.orientechnologies.orient.core.metadata.schema.OType;
 import com.orientechnologies.orient.core.record.impl.ODocument;
 import com.orientechnologies.orient.core.sql.query.OSQLSynchQuery;
 
-import java.util.Iterator;
-import java.util.List;
-import java.util.Map;
-import java.util.Properties;
+import java.util.*;
 
 public class OrientDbTest extends DbTest {
 
@@ -60,17 +57,26 @@ public class OrientDbTest extends DbTest {
 
 	@Override
 	public void finish() {
-//		db.close();
+		ODatabaseDocument db = threadInit();
+		db.close();
 	}
 
 	@Override
 	public void startTransaction() {
-
+		ODatabaseDocument db = threadInit();
+		db.begin();
 	}
 
 	@Override
 	public void commitTransaction() {
+		ODatabaseDocument db = threadInit();
+		db.commit();
+	}
 
+	@Override
+	public void rollbackTransaction() {
+		ODatabaseDocument db = threadInit();
+		db.rollback();
 	}
 
 	@Override
@@ -109,7 +115,7 @@ public class OrientDbTest extends DbTest {
 	}
 
 	@Override
-	public int querySimple(String tableName, List<QueryPredicate> predicates, int skip, int limit) {
+	public Map<String /*key*/, Map<String, Object> /*fields*/> querySimple(String tableName, List<QueryPredicate> predicates, int skip, int limit) {
 		ODatabaseDocument db = threadInit();
 
 		StringBuilder queryString = new StringBuilder("select * from " + tableName + " where ");
@@ -156,10 +162,10 @@ public class OrientDbTest extends DbTest {
 			queryString.append(" LIMIT ").append(limit);
 		}
 
-		System.out.println("Query string: " + queryString.toString());
+//		System.out.println("Query string: " + queryString.toString());
 
 		List<ODocument> res = db.query(new OSQLSynchQuery<>(queryString.toString()));
-		return res.size();
+		return queryResultToMap(res);
 	}
 
 	private String asQueryParameter(Object value) {
@@ -221,6 +227,14 @@ public class OrientDbTest extends DbTest {
 
 	private String fromORID(ORID orid) {
 		return orid.getClusterId() + "#" + orid.getClusterPosition();
+	}
+
+	private Map<String /*key*/, Map<String, Object> /*fields*/> queryResultToMap(List<ODocument> results) {
+		Map<String /*key*/, Map<String, Object> /*fields*/> out = new HashMap<>(results.size());
+		for (ODocument result : results) {
+			out.put(fromORID(result.getIdentity()), result.toMap());
+		}
+		return out;
 	}
 
 }

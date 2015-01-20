@@ -20,6 +20,8 @@ public abstract class DbTest {
 
 	public abstract void commitTransaction();
 
+	public abstract void rollbackTransaction();
+
 	public abstract String insert(String tableName, Map<String, Object> fields);
 
 	public abstract Map<String, Object> get(String key);
@@ -28,6 +30,6 @@ public abstract class DbTest {
 
 	public abstract void delete(String tableName, String key);
 
-	public abstract int querySimple(String tableName, List<QueryPredicate> predicates, int skip, int limit);
+	public abstract Map<String /*key*/, Map<String, Object> /*fields*/> querySimple(String tableName, List<QueryPredicate> predicates, int skip, int limit);
 
 }

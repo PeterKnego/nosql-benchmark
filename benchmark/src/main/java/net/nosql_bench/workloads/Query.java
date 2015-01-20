@@ -26,7 +26,7 @@ public class Query implements Workload {
 		long queryDuration = query(test, count, threads);
 		System.out.println("Query benchmark: count=" + count + " duration=" + queryDuration + " rate=" + ((1000 * count) / queryDuration));
 
-		if(cleanup){
+		if (cleanup) {
 			test.cleanup(tableName);
 		}
 	}
@@ -77,7 +77,7 @@ public class Query implements Workload {
 			for (int i = 0; i < countInThread; i++) {
 				List<QueryPredicate> predicates = new ArrayList<QueryPredicate>(1);
 				predicates.add(new QueryPredicate("text", QueryPredicate.OPERATOR.EQUALS, Tester.randomWord()));
-				int res = test.querySimple(tableName, predicates, 0, 0);
+				int res = test.querySimple(tableName, predicates, 0, 0).size();
 				double duration = (System.currentTimeMillis() - start);
 				if (printStatus) {
 					System.out.println("query " + Thread.currentThread().getName() + " " + i + " dur:" + duration
