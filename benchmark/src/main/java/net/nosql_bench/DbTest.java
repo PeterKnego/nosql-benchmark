@@ -10,7 +10,9 @@ public abstract class DbTest {
 
 	public abstract void init(Properties props);
 
-	public abstract void register(String tableName, List<FieldDefinition> fields, boolean dropExisting);
+	public abstract void register(String tableName, List<FieldDefinition> fields);
+
+	public abstract void cleanup(String tableName);
 
 	public abstract void finish();
 
@@ -26,6 +28,6 @@ public abstract class DbTest {
 
 	public abstract void delete(String tableName, String key);
 
-	public abstract int querySimple(String tableName, List<QueryPredicate> predicates);
+	public abstract int querySimple(String tableName, List<QueryPredicate> predicates, int skip, int limit);
 
 }

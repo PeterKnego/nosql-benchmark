@@ -8,10 +8,15 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 public class BulkInsert implements Workload {
 
+	private String tableName;
+
 	public void execute(DbTest test, Properties dbProperties, Properties workloadProperties) {
 
-		int count = PropsUtil.expandInt(workloadProperties.getProperty("count"));
+		tableName = workloadProperties.getProperty("tablename");
 		int threads = PropsUtil.expandInt(workloadProperties.getProperty("threads", "1"));
+		boolean cleanup = Boolean.valueOf(workloadProperties.getProperty("cleanup", "false"));
+
+		int count = PropsUtil.expandInt(workloadProperties.getProperty("insert.count"));
 
 		setup(test, dbProperties, true);
 
@@ -19,24 +24,27 @@ public class BulkInsert implements Workload {
 		long insertDuration = insert(test, count, threads);
 		System.out.println("Inserts benchmark: count=" + count + " duration=" + insertDuration + " rate=" + ((1000 * count) / insertDuration));
 
+		if (cleanup) {
+			test.cleanup(tableName);
+		}
 	}
 
 
-	public static void setup(final DbTest test, Properties props, boolean dropExisting) {
+	public void setup(final DbTest test, Properties props, boolean dropExisting) {
 		test.init(props);
 		List<FieldDefinition> fieldDef = new ArrayList<>();
 		fieldDef.add(new FieldDefinition("number", FieldDefinition.FIELD_TYPE.INTEGER, FieldDefinition.INDEX_TYPE.RANGE));
 		fieldDef.add(new FieldDefinition("text", FieldDefinition.FIELD_TYPE.STRING, FieldDefinition.INDEX_TYPE.RANGE));
 
-		test.register("BenchTest", fieldDef, dropExisting);
+		test.register("BenchTest", fieldDef);
 	}
 
-	public static long insert(final DbTest test, final int count, final int threads) {
+	public long insert(final DbTest test, final int count, final int threads) {
 
 		ScenarioExecutor<Void> executor = new ScenarioExecutor<Void>(threads);
 
 		for (int n = 1; n <= threads; n++) {
-			executor.addTask(new InsertTask(test, count / threads, n == 1));
+			executor.addTask(new InsertTask(test, count / threads, n == 1, tableName));
 		}
 
 		long start = System.currentTimeMillis();
@@ -47,10 +55,13 @@ public class BulkInsert implements Workload {
 
 	public static class InsertTask implements Callable<List<Void>> {
 
-		public InsertTask(DbTest test, int countInThread, boolean printStatus) {
+		private String tableName;
+
+		public InsertTask(DbTest test, int countInThread, boolean printStatus, String tableName) {
 			this.test = test;
 			this.countInThread = countInThread;
 			this.printStatus = printStatus;
+			this.tableName = tableName;
 		}
 
 		private static AtomicInteger totalCount = new AtomicInteger(0);
@@ -71,7 +82,7 @@ public class BulkInsert implements Workload {
 				fields.put("number", Tester.randomInt());
 				fields.put("text", Tester.randomWord());
 
-				test.insert("BenchTest", fields);
+				test.insert(tableName, fields);
 				int total = totalCount.addAndGet(1);
 
 				if (printStatus && i % 1000 == 0) {

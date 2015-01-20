@@ -1,6 +1,5 @@
 package net.nosql_bench;
 
-import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
 import java.io.InputStream;
@@ -21,8 +20,8 @@ public class Main {
 
 		Properties workloadProperties = new Properties();
 		try {
-			InputStream propertiesStream = Main.class.getResourceAsStream("/workloads/"+workloadPropertiesPath+".properties");
-			if (propertiesStream == null){
+			InputStream propertiesStream = Main.class.getResourceAsStream("/workloads/" + workloadPropertiesPath + ".properties");
+			if (propertiesStream == null) {
 				propertiesStream = new FileInputStream(workloadPropertiesPath);
 			}
 			workloadProperties.load(propertiesStream);
@@ -33,8 +32,8 @@ public class Main {
 
 		Properties dbProperties = new Properties();
 		try {
-			InputStream propertiesStream = Main.class.getResourceAsStream("/"+dbPropertiesPath+".properties");
-			if (propertiesStream == null){
+			InputStream propertiesStream = Main.class.getResourceAsStream("/" + dbPropertiesPath + ".properties");
+			if (propertiesStream == null) {
 				propertiesStream = new FileInputStream(dbPropertiesPath);
 			}
 			dbProperties.load(propertiesStream);

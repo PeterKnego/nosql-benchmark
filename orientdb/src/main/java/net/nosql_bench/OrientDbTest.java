@@ -32,6 +32,11 @@ public class OrientDbTest extends DbTest {
 		schema = db.getMetadata().getSchema();
 	}
 
+	@Override
+	public void cleanup(String tableName) {
+		schema.dropClass(tableName);
+	}
+
 	private ODatabaseDocument threadInit() {
 		if (!ODatabaseRecordThreadLocal.INSTANCE.isDefined()) {
 			ODatabaseDocumentInternal db = new ODatabaseDocumentTx(properties.getProperty("database"))
@@ -42,11 +47,8 @@ public class OrientDbTest extends DbTest {
 	}
 
 	@Override
-	public void register(String tableName, List<FieldDefinition> fields, boolean dropExisting) {
+	public void register(String tableName, List<FieldDefinition> fields) {
 		OClass oldCls = schema.getClass(tableName);
-		if (dropExisting && oldCls != null) {
-			schema.dropClass(tableName);
-		}
 		OClass cls = schema.getOrCreateClass(tableName);
 		for (FieldDefinition field : fields) {
 			if (!cls.existsProperty(field.fieldName)) {
@@ -107,7 +109,7 @@ public class OrientDbTest extends DbTest {
 	}
 
 	@Override
-	public int querySimple(String tableName, List<QueryPredicate> predicates) {
+	public int querySimple(String tableName, List<QueryPredicate> predicates, int skip, int limit) {
 		ODatabaseDocument db = threadInit();
 
 		StringBuilder queryString = new StringBuilder("select * from " + tableName + " where ");
@@ -144,6 +146,14 @@ public class OrientDbTest extends DbTest {
 			if (iterator.hasNext()) {
 				queryString.append(" and");
 			}
+		}
+
+		if (skip != 0) {
+			queryString.append(" SKIP ").append(skip);
+		}
+
+		if (limit != 0) {
+			queryString.append(" LIMIT ").append(limit);
 		}
 
 		System.out.println("Query string: " + queryString.toString());
