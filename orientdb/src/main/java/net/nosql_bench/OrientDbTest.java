@@ -16,7 +16,7 @@ import com.orientechnologies.orient.core.sql.query.OSQLSynchQuery;
 
 import java.util.*;
 
-public class OrientDbTest extends DbTest {
+public class OrientDbTest extends Database {
 
 	private OSchema schema;
 

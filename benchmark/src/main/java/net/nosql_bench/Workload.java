@@ -4,6 +4,6 @@ import java.util.Properties;
 
 public interface Workload {
 
-	void execute(DbTest test, Properties dbProperties, Properties workloadProperties);
+	void execute(Database test, Properties dbProperties, Properties workloadProperties);
 
 }

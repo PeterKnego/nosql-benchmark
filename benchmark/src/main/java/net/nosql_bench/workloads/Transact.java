@@ -10,7 +10,7 @@ public class Transact implements Workload {
 	private String tableName;
 
 	@Override
-	public void execute(DbTest test, Properties dbProperties, Properties workloadProperties) {
+	public void execute(Database test, Properties dbProperties, Properties workloadProperties) {
 
 		tableName = workloadProperties.getProperty("tablename");
 		boolean cleanup = Boolean.valueOf(workloadProperties.getProperty("cleanup", "false"));
@@ -35,7 +35,7 @@ public class Transact implements Workload {
 		}
 	}
 
-	public void setup(final DbTest test, Properties props) {
+	public void setup(final Database test, Properties props) {
 
 		// initialise the db
 		test.init(props);
@@ -46,7 +46,7 @@ public class Transact implements Workload {
 		test.register(tableName, fieldDef);
 	}
 
-	public void createInitialEntities(final DbTest test, final int numEntities, final int ceiling) {
+	public void createInitialEntities(final Database test, final int numEntities, final int ceiling) {
 
 		for (int n = 1; n <= numEntities; n++) {
 			Map<String, Object> fields = new HashMap<>(2);
@@ -61,7 +61,7 @@ public class Transact implements Workload {
 		}
 	}
 
-	public long transact(final DbTest test, final int threads, final int ceiling) {
+	public long transact(final Database test, final int threads, final int ceiling) {
 
 		ScenarioExecutor<Void> executor = new ScenarioExecutor<Void>(threads);
 
@@ -76,14 +76,14 @@ public class Transact implements Workload {
 
 	public static class TransactTask implements Callable<List<Void>> {
 
-		public TransactTask(DbTest test, int ceiling, boolean printStatus, String tableName) {
+		public TransactTask(Database test, int ceiling, boolean printStatus, String tableName) {
 			this.test = test;
 			this.ceiling = ceiling;
 			this.printStatus = printStatus;
 			this.tableName = tableName;
 		}
 
-		private DbTest test;
+		private Database test;
 		private int ceiling;
 		private boolean printStatus;
 		private String tableName;

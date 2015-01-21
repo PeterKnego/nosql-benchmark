@@ -12,7 +12,7 @@ public class Query implements Workload {
 
 	private String tableName;
 
-	public void execute(DbTest test, Properties dbProperties, Properties workloadProperties) {
+	public void execute(Database test, Properties dbProperties, Properties workloadProperties) {
 
 		tableName = workloadProperties.getProperty("tablename");
 		boolean cleanup = Boolean.valueOf(workloadProperties.getProperty("cleanup", "false"));
@@ -32,7 +32,7 @@ public class Query implements Workload {
 	}
 
 
-	public void setup(final DbTest test, Properties props) {
+	public void setup(final Database test, Properties props) {
 		test.init(props);
 		List<FieldDefinition> fieldDef = new ArrayList<>();
 		fieldDef.add(new FieldDefinition("number", FieldDefinition.FIELD_TYPE.INTEGER, FieldDefinition.INDEX_TYPE.RANGE));
@@ -41,7 +41,7 @@ public class Query implements Workload {
 		test.register("BenchTest", fieldDef);
 	}
 
-	public long query(final DbTest test, final int count, final int threads) {
+	public long query(final Database test, final int count, final int threads) {
 
 		ScenarioExecutor<Void> executor = new ScenarioExecutor<Void>(threads);
 
@@ -56,7 +56,7 @@ public class Query implements Workload {
 
 	public static class QueryTask implements Callable<List<Void>> {
 
-		public QueryTask(DbTest test, int countInThread, boolean printStatus, String tableName) {
+		public QueryTask(Database test, int countInThread, boolean printStatus, String tableName) {
 			this.test = test;
 			this.countInThread = countInThread;
 			this.printStatus = printStatus;
@@ -68,7 +68,7 @@ public class Query implements Workload {
 		private int countInThread;
 		private boolean printStatus;
 		private String tableName;
-		private DbTest test;
+		private Database test;
 
 		@Override
 		public List<Void> call() throws Exception {

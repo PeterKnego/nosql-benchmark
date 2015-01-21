@@ -56,14 +56,14 @@ public class Main {
 			return;
 		}
 
-		DbTest test;
+		Database test;
 		try {
 			String className = dbProperties.getProperty("class");
 			if (className == null) {
 				System.out.println("Error: property 'class' not defined in database properties: " + dbPropertiesPath);
 				return;
 			}
-			test = (DbTest) Main.class.getClassLoader().loadClass(className).newInstance();
+			test = (Database) Main.class.getClassLoader().loadClass(className).newInstance();
 		} catch (InstantiationException | ClassNotFoundException | IllegalAccessException e) {
 			System.out.println(e.getMessage());
 			return;

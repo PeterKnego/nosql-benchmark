@@ -10,7 +10,7 @@ public class BulkInsert implements Workload {
 
 	private String tableName;
 
-	public void execute(DbTest test, Properties dbProperties, Properties workloadProperties) {
+	public void execute(Database test, Properties dbProperties, Properties workloadProperties) {
 
 		tableName = workloadProperties.getProperty("tablename");
 		int threads = PropsUtil.expandInt(workloadProperties.getProperty("threads", "1"));
@@ -30,7 +30,7 @@ public class BulkInsert implements Workload {
 	}
 
 
-	public void setup(final DbTest test, Properties props) {
+	public void setup(final Database test, Properties props) {
 		test.init(props);
 		List<FieldDefinition> fieldDef = new ArrayList<>();
 		fieldDef.add(new FieldDefinition("number", FieldDefinition.FIELD_TYPE.INTEGER, FieldDefinition.INDEX_TYPE.RANGE));
@@ -39,7 +39,7 @@ public class BulkInsert implements Workload {
 		test.register("BenchTest", fieldDef);
 	}
 
-	public long insert(final DbTest test, final int count, final int threads) {
+	public long insert(final Database test, final int count, final int threads) {
 
 		ScenarioExecutor<Void> executor = new ScenarioExecutor<Void>(threads);
 
@@ -57,7 +57,7 @@ public class BulkInsert implements Workload {
 
 		private String tableName;
 
-		public InsertTask(DbTest test, int countInThread, boolean printStatus, String tableName) {
+		public InsertTask(Database test, int countInThread, boolean printStatus, String tableName) {
 			this.test = test;
 			this.countInThread = countInThread;
 			this.printStatus = printStatus;
@@ -68,7 +68,7 @@ public class BulkInsert implements Workload {
 
 		private int countInThread;
 		private boolean printStatus;
-		private DbTest test;
+		private Database test;
 
 		@Override
 		public List<Void> call() throws Exception {
