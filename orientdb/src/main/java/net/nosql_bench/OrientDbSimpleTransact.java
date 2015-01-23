@@ -1,10 +1,8 @@
 package net.nosql_bench;
 
-import com.orientechnologies.orient.core.db.ODatabase;
 import com.orientechnologies.orient.core.db.document.ODatabaseDocument;
 import com.orientechnologies.orient.core.db.document.ODatabaseDocumentTx;
 import com.orientechnologies.orient.core.id.ORID;
-import com.orientechnologies.orient.core.id.ORecordId;
 import com.orientechnologies.orient.core.metadata.schema.OClass;
 import com.orientechnologies.orient.core.metadata.schema.OSchema;
 import com.orientechnologies.orient.core.metadata.schema.OType;
@@ -16,7 +14,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 public class OrientDbSimpleTransact {
 
-	private static final AtomicInteger testInt = new AtomicInteger(1000);
+	private static final AtomicInteger testInt = new AtomicInteger(0);
+	private static final AtomicInteger collisions = new AtomicInteger(0);
 
 	public static void main(String[] args) {
 
@@ -24,7 +23,7 @@ public class OrientDbSimpleTransact {
 				.open("admin", "admin");
 		OSchema schema = db.getMetadata().getSchema();
 
-		System.out.println("MVCC:"+db.isMVCC());
+		System.out.println("MVCC: " + db.isMVCC());
 
 		String tableName = "Test";
 		int threads = 20;
@@ -39,7 +38,7 @@ public class OrientDbSimpleTransact {
 
 		// create initial entity
 		ODocument doc = new ODocument(tableName);
-		doc.field(fieldName, 1000);
+		doc.field(fieldName, 0);
 		ORID orid = db.save(doc).getIdentity();
 
 		// starting threads
@@ -47,7 +46,7 @@ public class OrientDbSimpleTransact {
 		for (int n = 1; n <= threads; n++) {
 
 			int delta = 1;
-			executor.addTask(new TransactTask(orid, delta, repeat, tableName));
+			executor.addTask(new TransactTask(orid, delta, repeat));
 			System.out.println("Added task:" + n + " delta:" + delta);
 		}
 		executor.start();
@@ -56,23 +55,27 @@ public class OrientDbSimpleTransact {
 		// get initial entity
 		ODocument res = db.load(orid, null, true);
 
-		System.out.println("Result: ("+orid+") number=" + res.toMap().get(fieldName));
-		System.out.println("Test integer: " + testInt);
+		System.out.println("Result: (" + orid + ") updates: " + res.toMap().get(fieldName));
+		System.out.println("Test counter: " + testInt);
+		System.out.println("Collisions: " + collisions);
+		if (res.toMap().get(fieldName) != testInt) {
+			System.out.println("Error: number of updates (" +
+					res.toMap().get(fieldName) + ") is not equal to test counter (" + collisions + ").");
+		}
+
 	}
 
 	public static class TransactTask implements Callable<List<Void>> {
 
-		public TransactTask(ORID key, int delta, int repeat, String tableName) {
+		public TransactTask(ORID key, int delta, int repeat) {
 			this.key = key;
 			this.delta = delta;
 			this.repeat = repeat;
-			this.tableName = tableName;
 		}
 
 		private ORID key;
 		private int delta;
 		private int repeat;
-		private String tableName;
 
 		@Override
 		public List<Void> call() throws Exception {
@@ -101,6 +104,7 @@ public class OrientDbSimpleTransact {
 						db.rollback();
 					}
 				} catch (RuntimeException re) {
+					collisions.addAndGet(1);
 					System.out.println("Collision: " + re.getMessage());
 					db.rollback();
 				}
