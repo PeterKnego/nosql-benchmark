@@ -236,6 +236,10 @@ public class TestDatabase extends Database {
 						skip--;
 					} else if (limit > 0) {
 						limit--;
+						// we need to remember all entities within the transaction
+						if (isTransaction()) {
+							updateLocalTransaction(entity);
+						}
 						results.put(entity.key.toString(), new HashMap<>(entity.fields));
 					} else {
 						break;
@@ -254,6 +258,8 @@ public class TestDatabase extends Database {
 		switch (predicate.operator) {
 			case EQUALS:
 				return value.equals(fieldVal);
+			case NOT_EQUALS:
+				return !value.equals(fieldVal);
 			case GREATER:
 				return greater(fieldVal, value);
 			case GREATER_EQUALS:

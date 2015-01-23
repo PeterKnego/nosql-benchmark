@@ -23,12 +23,9 @@ public class ScenarioExecutor<T> {
 	private List<Future<List<T>>> results;
 
 	/**
-	 * @param maxThreads Number of threads in the internal thread pool. Max number is 50 per current request, limited by current GAE implementation.
+	 * @param maxThreads Number of threads in the internal thread pool.
 	 */
 	public ScenarioExecutor(int maxThreads) {
-		if (maxThreads > 50) {
-			throw new IllegalArgumentException("GAE supports max 50 threads per request");
-		}
 		es = Executors.newFixedThreadPool(maxThreads);
 	}
 

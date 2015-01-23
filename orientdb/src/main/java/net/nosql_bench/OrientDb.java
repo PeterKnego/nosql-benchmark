@@ -1,10 +1,6 @@
 package net.nosql_bench;
 
 
-import com.orientechnologies.orient.core.db.ODatabase;
-import com.orientechnologies.orient.core.db.ODatabaseDocumentInternal;
-import com.orientechnologies.orient.core.db.ODatabaseRecordThreadLocal;
-import com.orientechnologies.orient.core.db.document.ODatabaseDocument;
 import com.orientechnologies.orient.core.db.document.ODatabaseDocumentTx;
 import com.orientechnologies.orient.core.id.ORID;
 import com.orientechnologies.orient.core.id.ORecordId;
@@ -16,16 +12,24 @@ import com.orientechnologies.orient.core.sql.query.OSQLSynchQuery;
 
 import java.util.*;
 
-public class OrientDbTest extends Database {
+public class OrientDb extends Database {
 
+	//	private OPartitionedDatabasePool dbPool;
 	private OSchema schema;
 
+	private static ThreadLocal<ODatabaseDocumentTx> threadLocalDb = new ThreadLocal<>();
 
 	@Override
 	public void init(Properties props) {
+
 		this.properties = props;
-		ODatabase db = new ODatabaseDocumentTx(properties.getProperty("database"))
-				.open(properties.getProperty("username"), properties.getProperty("password"));
+//		dbPool = new OPartitionedDatabasePoolFactory().get(
+//				properties.getProperty("database"),
+//				properties.getProperty("username"),
+//				properties.getProperty("password"));
+
+//		ODatabase db = dbPool.acquire();
+		ODatabaseDocumentTx db = threadInit();
 		schema = db.getMetadata().getSchema();
 	}
 
@@ -34,13 +38,18 @@ public class OrientDbTest extends Database {
 		schema.dropClass(tableName);
 	}
 
-	private ODatabaseDocument threadInit() {
-		if (!ODatabaseRecordThreadLocal.INSTANCE.isDefined()) {
-			ODatabaseDocumentInternal db = new ODatabaseDocumentTx(properties.getProperty("database"))
-					.open(properties.getProperty("username"), properties.getProperty("password"));
-			ODatabaseRecordThreadLocal.INSTANCE.set(db);
+	private ODatabaseDocumentTx threadInit() {
+
+		ODatabaseDocumentTx db = null;
+		if (threadLocalDb.get() == null) {
+			db = new ODatabaseDocumentTx(properties.getProperty("database")).open(properties.getProperty("username"), properties.getProperty("password"));
+			threadLocalDb.set(db);
 		}
-		return ODatabaseRecordThreadLocal.INSTANCE.get();
+		db = threadLocalDb.get();
+
+//		ODatabaseDocumentTx db = dbPool.acquire();
+		System.out.println("Thread: " + Thread.currentThread().getName() + " db:" + db.toString());
+		return db;
 	}
 
 	@Override
@@ -57,31 +66,35 @@ public class OrientDbTest extends Database {
 
 	@Override
 	public void finish() {
-		ODatabaseDocument db = threadInit();
+		ODatabaseDocumentTx db = threadInit();
 		db.close();
+		threadLocalDb.remove();
 	}
 
 	@Override
 	public void startTransaction() {
-		ODatabaseDocument db = threadInit();
+		ODatabaseDocumentTx db = threadInit();
 		db.begin();
 	}
 
 	@Override
 	public void commitTransaction() {
-		ODatabaseDocument db = threadInit();
+		ODatabaseDocumentTx db = threadInit();
 		db.commit();
+		threadLocalDb.remove();
 	}
 
 	@Override
 	public void rollbackTransaction() {
-		ODatabaseDocument db = threadInit();
+		ODatabaseDocumentTx db = threadInit();
 		db.rollback();
+		threadLocalDb.remove();
+
 	}
 
 	@Override
 	public String insert(String tableName, Map<String, Object> fields) {
-		ODatabaseDocument db = threadInit();
+		ODatabaseDocumentTx db = threadInit();
 		ODocument doc = new ODocument(tableName);
 		for (Map.Entry<String, Object> field : fields.entrySet()) {
 			doc.field(field.getKey(), field.getValue());
@@ -92,15 +105,15 @@ public class OrientDbTest extends Database {
 
 	@Override
 	public Map<String, Object> get(String key) {
-		ODatabaseDocument db = threadInit();
+		ODatabaseDocumentTx db = threadInit();
 		ODocument doc = db.load(toORID(key));
 		return doc.toMap();
 	}
 
 	@Override
 	public void put(String tableName, String key, Map<String, Object> fields) {
-		ODatabaseDocument db = threadInit();
-		ODocument doc = db.load(toORID(key));
+		ODatabaseDocumentTx db = threadInit();
+		ODocument doc = db.load(toORID(key), null, true);
 		for (Map.Entry<String, Object> field : fields.entrySet()) {
 			doc.field(field.getKey(), field.getValue());
 		}
@@ -109,14 +122,14 @@ public class OrientDbTest extends Database {
 
 	@Override
 	public void delete(String tableName, String key) {
-		ODatabaseDocument db = threadInit();
+		ODatabaseDocumentTx db = threadInit();
 		ORID orid = toORID(key);
 		db.delete(orid);
 	}
 
 	@Override
 	public Map<String /*key*/, Map<String, Object> /*fields*/> querySimple(String tableName, List<QueryPredicate> predicates, int skip, int limit) {
-		ODatabaseDocument db = threadInit();
+		ODatabaseDocumentTx db = threadInit();
 
 		StringBuilder queryString = new StringBuilder("select * from " + tableName + " where ");
 		Iterator<QueryPredicate> iterator = predicates.iterator();
@@ -126,6 +139,9 @@ public class OrientDbTest extends Database {
 			switch (predicate.operator) {
 				case EQUALS:
 					queryString.append(" == ").append(asQueryParameter(predicate.value));
+					break;
+				case NOT_EQUALS:
+					queryString.append(" <> ").append(asQueryParameter(predicate.value));
 					break;
 				case CONTAINS:
 					queryString.append(" contains ").append(predicate.value);

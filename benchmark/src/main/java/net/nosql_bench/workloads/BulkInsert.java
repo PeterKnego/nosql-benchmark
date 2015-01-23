@@ -41,7 +41,7 @@ public class BulkInsert implements Workload {
 
 	public long insert(final Database test, final int count, final int threads) {
 
-		ScenarioExecutor<Void> executor = new ScenarioExecutor<Void>(threads);
+		ScenarioExecutor<Void> executor = new ScenarioExecutor<Void>(100);
 
 		for (int n = 1; n <= threads; n++) {
 			executor.addTask(new InsertTask(test, count / threads, n == 1, tableName));
