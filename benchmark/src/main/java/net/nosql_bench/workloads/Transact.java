@@ -9,6 +9,8 @@ public class Transact implements Workload {
 
 	private String tableName;
 
+	private final static Random random = new Random(500);
+
 	@Override
 	public void execute(Database test, Properties dbProperties, Properties workloadProperties) {
 
@@ -107,6 +109,7 @@ public class Transact implements Workload {
 					Map<String, Map<String, Object>> greater = test.querySimple(tableName, greaterPredicate, 0, 1);
 
 					if (lesser.size() == 1 && greater.size() == 1) {
+//						System.out.println("transact " + Thread.currentThread().getName() + "FOUND lesser:" + lesser.size() + " greater:" + greater.size());
 
 						Map<String, Object> lesserEnt = lesser.values().iterator().next();
 						lesserEnt.put("number", ((Integer) lesserEnt.get("number")) + 1);  //increase by 1
@@ -116,10 +119,13 @@ public class Transact implements Workload {
 						greaterEnt.put("number", ((Integer) greaterEnt.get("number")) - 1);   // decrease by 1
 						String greaterKey = greater.keySet().iterator().next();
 
-						System.out.println("FOUND lesser:" + lesserKey + " greater:" + greaterKey);
+//						System.out.println("FOUND lesser:" + lesserKey + " greater:" + greaterKey);
 
 						test.put(tableName, lesserKey, lesserEnt);
 						test.put(tableName, greaterKey, greaterEnt);
+						int sleep = random.nextInt(1000);
+						System.out.println("Sleep: " + sleep);
+						Thread.sleep(sleep);
 
 						test.commitTransaction();
 					} else {
@@ -127,8 +133,9 @@ public class Transact implements Workload {
 						test.rollbackTransaction();
 						loop = false;
 					}
-				} catch (RuntimeException re){
-					System.out.println("Collision!");
+				} catch (RuntimeException re) {
+					System.out.println("Collision: ");
+					re.printStackTrace();
 					test.rollbackTransaction();
 				} finally {
 					test.finish();

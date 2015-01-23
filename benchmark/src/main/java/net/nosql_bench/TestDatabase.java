@@ -7,22 +7,46 @@ public class TestDatabase extends Database {
 
 	private AtomicInteger idCounter = new AtomicInteger(0);
 
-	private ThreadLocal<Map<Key, Transaction>> transaction = new ThreadLocal<>();
+	private ThreadLocal<Map<Key, Transaction>> threadLocalTransaction = new ThreadLocal<>();
 
 	private Map<Key, Entity> db;
+
+	/**
+	 * For test purposes only!
+	 */
+	void setTransaction(Map<Key, Transaction> transactionContext) {
+		threadLocalTransaction.set(transactionContext);
+	}
+
+	/**
+	 * For test purposes only!
+	 */
+	public Map<Key, Transaction> getTransaction() {
+		return threadLocalTransaction.get();
+	}
 
 	private synchronized String createId() {
 		return String.valueOf(idCounter.addAndGet(1));
 	}
 
-	private void updateLocalTransaction(Entity entity) {
+	private Key updateLocalTransaction(Entity entity) {
+
+		entity = Entity.copy(entity);
+
 		if (!isTransaction()) {
 			throw new RuntimeException("Error:Transaction not started!");
 		}
 		if (entity.key.id == null) {
-			entity.key.id = createId();
+			entity.key = new Key(entity.key.kind, createId());
 		}
-		transaction.get().put(entity.key, new Transaction("update", entity));
+
+		Transaction existing = threadLocalTransaction.get().get(entity.key);
+		if (existing != null) {
+			entity.version = existing.entity.version;
+		}
+
+		threadLocalTransaction.get().put(entity.key, new Transaction("update", entity));
+		return entity.key;
 	}
 
 	private void removeFromLocalTransaction(Key key) {
@@ -30,35 +54,39 @@ public class TestDatabase extends Database {
 			throw new RuntimeException("Error:Transaction not started!");
 		}
 		if (key.id == null) {
-			key.id = createId();
+			key = new Key(key.kind, createId());
 		}
-		transaction.get().put(key, new Transaction("delete", key));
+		threadLocalTransaction.get().put(key, new Transaction("delete", key));
 	}
 
 	private synchronized Entity getEntity(Key key) {
 		return db.get(key);
 	}
 
-	private synchronized void transactionallyUpdateDB(Collection<Transaction> transactions) throws IllegalStateException {
-		transactionallyUpdateDB(transactions.toArray(new Transaction[transactions.size()]));
+	private synchronized void transactionallyUpdateDB(Collection<Transaction> transactions, boolean enforceVersioning) throws IllegalStateException {
+		transactionallyUpdateDB(enforceVersioning, transactions.toArray(new Transaction[transactions.size()]));
 	}
 
-	private synchronized void transactionallyUpdateDB(Transaction... transactions) throws IllegalStateException {
+	private synchronized void transactionallyUpdateDB(boolean enforceVersioning, Transaction... transactions) throws IllegalStateException {
 		for (Transaction trans : transactions) {
 			Entity changed = trans.entity;
 			if (changed.key.id != null) {
 				Entity original = db.get(changed.key);
+				if (original != null && !enforceVersioning) {
+					changed.version = original.version;
+				}
 				if (original == null && changed.version != 0) {   // new entity has version!=0 (most probably original was deleted)
 					throw new IllegalStateException("New entity has version=" + changed.version);
 				} else if (original != null && changed.version != original.version) {
 					throw new IllegalStateException("Entity(" + changed.key + ") version has changed. changed=" + changed.version + " original=" + original.version);
 				}
 			} else {
-				changed.key.id = createId(); // generate new unique ID
+				changed.key = new Key(changed.key.kind, createId()); // generate new unique ID
 			}
 		}
 		for (Transaction trans : transactions) {
 			if (trans.operation.equals("update")) {
+				trans.entity.version++;
 				db.put(trans.entity.key, trans.entity);
 			} else if (trans.operation.equals("update")) {
 				db.remove(trans.entity.key);
@@ -66,8 +94,33 @@ public class TestDatabase extends Database {
 		}
 	}
 
+	private synchronized Key transactionallyUpdateDB(Transaction trans, boolean enforceVersioning) throws IllegalStateException {
+		Entity changed = trans.entity;
+		if (changed.key.id != null) {
+			Entity original = db.get(changed.key);
+			if (original != null && !enforceVersioning) {
+				changed.version = original.version;
+			}
+			if (original == null && changed.version != 0) {   // new entity has version!=0 (most probably original was deleted)
+				throw new IllegalStateException("New entity has version=" + changed.version);
+			} else if (original != null && changed.version != original.version) {
+				throw new IllegalStateException("Entity(" + changed.key + ") version has changed. changed=" + changed.version + " original=" + original.version);
+			}
+		} else {
+			changed.key = new Key(changed.key.kind, createId()); // generate new unique ID
+		}
+
+		if (trans.operation.equals("update")) {
+			trans.entity.version++;
+			db.put(trans.entity.key, trans.entity);
+		} else if (trans.operation.equals("update")) {
+			db.remove(trans.entity.key);
+		}
+		return trans.entity.key;
+	}
+
 	private boolean isTransaction() {
-		return transaction.get() != null;
+		return threadLocalTransaction.get() != null;
 	}
 
 	@Override
@@ -87,16 +140,15 @@ public class TestDatabase extends Database {
 
 	@Override
 	public void finish() {
-		db = null;
+
 	}
 
 	@Override
 	public void startTransaction() {
 		if (isTransaction()) {
 			throw new IllegalStateException("Transaction already started");
-
 		}
-		transaction.set(new HashMap<Key, Transaction>(5));
+		threadLocalTransaction.set(new HashMap<Key, Transaction>(5));
 	}
 
 	@Override
@@ -104,15 +156,15 @@ public class TestDatabase extends Database {
 
 		// transaction active?
 		if (isTransaction()) {
-			transactionallyUpdateDB(transaction.get().values());
+			transactionallyUpdateDB(threadLocalTransaction.get().values(), true);
 		}
 
-		transaction.remove();
+		threadLocalTransaction.remove();
 	}
 
 	@Override
 	public void rollbackTransaction() {
-		transaction.remove();
+		threadLocalTransaction.remove();
 	}
 
 	@Override
@@ -122,23 +174,30 @@ public class TestDatabase extends Database {
 
 		// transaction active?
 		if (isTransaction()) {
-			transaction.get().put(entity.key, new Transaction("update", entity));
+			return updateLocalTransaction(entity).toString();
 		} else {
-			transactionallyUpdateDB(new Transaction("update", entity));
+			return transactionallyUpdateDB(new Transaction("update", entity), false).toString();
 		}
-		return null;
 	}
 
 	@Override
 	public Map<String, Object> get(String stringKey) {
-		Entity entity;
+		Entity entity = null;
 		Key key = Key.fromString(stringKey);
 		if (isTransaction()) {
-			entity = transaction.get().get(key).entity;
-		} else {
+			Transaction transaction = threadLocalTransaction.get().get(key);
+			entity = transaction != null ? transaction.entity : null;
+		}
+
+		if (entity == null) {
 			entity = getEntity(key);
 		}
-		return entity == null ? null : entity.fields;
+
+		// we need to remember all entities within the transaction
+		if (isTransaction()) {
+			updateLocalTransaction(entity);
+		}
+		return entity == null ? null : new HashMap<>(entity.fields);
 	}
 
 	@Override
@@ -148,7 +207,7 @@ public class TestDatabase extends Database {
 		if (isTransaction()) {
 			updateLocalTransaction(entity);
 		} else {
-			transactionallyUpdateDB(new Transaction("update", entity));
+			transactionallyUpdateDB(new Transaction("update", entity), false);
 		}
 	}
 
@@ -158,22 +217,33 @@ public class TestDatabase extends Database {
 		if (isTransaction()) {
 			removeFromLocalTransaction(key);
 		} else {
-			transactionallyUpdateDB(new Transaction("delete", key));
+			transactionallyUpdateDB(new Transaction("delete", key), true);
 		}
 	}
 
 	@Override
 	public Map<String, Map<String, Object>> querySimple(String tableName, List<QueryPredicate> predicates, int skip, int limit) {
 		Map<String, Map<String, Object>> results = new HashMap<String, Map<String, Object>>();
-		for (Entity entity : db.values()) {
-			boolean matched = true;
-			for (QueryPredicate predicate : predicates) {
-				matched = matched && matchedField(entity, predicate);
-			}
-			if (matched) {
-				results.put(entity.key.toString(), entity.fields);
+
+		synchronized (this) {
+			for (Entity entity : db.values()) {
+				boolean matched = true;
+				for (QueryPredicate predicate : predicates) {
+					matched = matched && matchedField(entity, predicate);
+				}
+				if (matched) {
+					if (skip > 0) {
+						skip--;
+					} else if (limit > 0) {
+						limit--;
+						results.put(entity.key.toString(), new HashMap<>(entity.fields));
+					} else {
+						break;
+					}
+				}
 			}
 		}
+
 		return results;
 	}
 
@@ -222,7 +292,7 @@ public class TestDatabase extends Database {
 			throw new IllegalArgumentException("Query operator GREATER can not be used on non-numeric fields.");
 		}
 
-		Number numValue = toNumber(field);
+		Number numValue = toNumber(value);
 		if (numValue == null) {
 			throw new IllegalArgumentException("Query operator GREATER can not be used with non-numeric values.");
 		}
@@ -239,7 +309,7 @@ public class TestDatabase extends Database {
 			throw new IllegalArgumentException("Query operator GREATER can not be used on non-numeric fields.");
 		}
 
-		Number numValue = toNumber(field);
+		Number numValue = toNumber(value);
 		if (numValue == null) {
 			throw new IllegalArgumentException("Query operator GREATER can not be used with non-numeric values.");
 		}
@@ -256,7 +326,7 @@ public class TestDatabase extends Database {
 			throw new IllegalArgumentException("Query operator GREATER can not be used on non-numeric fields.");
 		}
 
-		Number numValue = toNumber(field);
+		Number numValue = toNumber(value);
 		if (numValue == null) {
 			throw new IllegalArgumentException("Query operator GREATER can not be used with non-numeric values.");
 		}
@@ -273,7 +343,7 @@ public class TestDatabase extends Database {
 			throw new IllegalArgumentException("Query operator GREATER can not be used on non-numeric fields.");
 		}
 
-		Number numValue = toNumber(field);
+		Number numValue = toNumber(value);
 		if (numValue == null) {
 			throw new IllegalArgumentException("Query operator GREATER can not be used with non-numeric values.");
 		}
@@ -281,11 +351,12 @@ public class TestDatabase extends Database {
 	}
 
 	public static class Key {
-		public String kind;
-		public String id;
+		private final String kind;
+		private final String id;
 
 		public Key(String kind) {
 			this.kind = kind;
+			id = null;
 		}
 
 		public Key(String kind, String id) {
@@ -294,8 +365,18 @@ public class TestDatabase extends Database {
 		}
 
 		@Override
-		public boolean equals(Object obj) {
-			return (Key.class.equals(obj.getClass())) && ((Key) obj).id.equals(this.id) && ((Key) obj).kind.equals(this.kind);
+		public boolean equals(Object o) {
+			if (this == o) return true;
+			if (o == null || getClass() != o.getClass()) return false;
+
+			Key key = (Key) o;
+
+			return id.equals(key.id) && kind.equals(key.kind);
+		}
+
+		@Override
+		public int hashCode() {
+			return 31 * kind.hashCode() + id.hashCode();
 		}
 
 		public static Key createNew(String kind) {
@@ -311,26 +392,37 @@ public class TestDatabase extends Database {
 		public String toString() {
 			return kind + ":" + id;
 		}
+
+		public static Key copy(Key key) {
+			return new Key(key.kind, key.id);
+		}
 	}
 
 	public static class Entity {
 
+		public Key key;
+		public Map<String, Object> fields = new HashMap<>();
+		private int version = 0;  // new entities have version=0
+
 		public Entity(Key key, Map<String, Object> fields) {
 			this.key = key;
-			this.fields = fields;
+			this.fields = new HashMap<>(fields);
 		}
 
 		public Entity(String kind, Map<String, Object> fields) {
 			this.key = Key.createNew(kind);
-			this.fields = fields;
+			this.fields = new HashMap<>(fields);
 		}
 
-		public Key key;
+		public Entity(Key copy, int version, HashMap<String, Object> fields) {
+			key = copy;
+			this.version = version;
+			this.fields = new HashMap<>(fields);;
+		}
 
-		// new entitieas have version=0
-		private int version = 0;
-
-		public Map<String, Object> fields = new HashMap<>();
+		public static Entity copy(Entity entity) {
+			return new Entity(Key.copy(entity.key), entity.version, new HashMap<>(entity.fields));
+		}
 	}
 
 	public static class Transaction {
