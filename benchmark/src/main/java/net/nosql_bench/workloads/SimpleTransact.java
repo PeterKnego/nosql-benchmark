@@ -9,10 +9,12 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class SimpleTransact implements Workload {
 
 	private String tableName;
-	private int initialValue = 1000;
+	private static final AtomicInteger verifyCounter = new AtomicInteger(0);
+	private static final AtomicInteger collisions = new AtomicInteger(0);
+
 
 	@Override
-	public void execute(Database test, Properties dbProperties, Properties workloadProperties) {
+	public void execute(Database db, Properties dbProperties, Properties workloadProperties) {
 
 		tableName = workloadProperties.getProperty("tablename");
 		boolean cleanup = Boolean.valueOf(workloadProperties.getProperty("cleanup", "false"));
@@ -20,20 +22,28 @@ public class SimpleTransact implements Workload {
 
 		int repeat = PropsUtil.expandInt(workloadProperties.getProperty("transact.repeat", "100"));
 
-		setup(test, dbProperties);
-		String key = createInitialEntity(test);
+		setup(db, dbProperties);
+		String key = createInitialEntity(db);
 
 		System.out.println("Starting transact..");
-		long queryDuration = transact(test, threads, key, repeat);
+		long queryDuration = transact(db, threads, key, repeat);
 		System.out.println("Transact benchmark: repeats=" + repeat + " duration=" + queryDuration + " rate=" + ((1000 * repeat) / queryDuration));
 
-		Map<String, Object> res = test.get(key);
+		Map<String, Object> res = db.get(key);
+		int counterResult = PropsUtil.expandInt(res.get("number").toString());
 
-		System.out.println("Result: number=" + res.get("number"));
+		System.out.println("Counter updates: " + counterResult);
+		System.out.println("Verify counter: " + verifyCounter);
+		System.out.println("Collisions: " + collisions);
+		if (counterResult != verifyCounter.get()) {
+			System.out.println("Error: number of updates (" +
+					counterResult + ") is not equal to verify counter (" + verifyCounter.get() + ").");
+		}
+
 
 		if (cleanup) {
 			System.out.println("Cleanup..");
-			test.cleanup(tableName);
+			db.cleanup(tableName);
 		}
 	}
 
@@ -51,7 +61,7 @@ public class SimpleTransact implements Workload {
 	public String createInitialEntity(final Database test) {
 
 		Map<String, Object> fields = new HashMap<>(2);
-		fields.put("number", initialValue);
+		fields.put("number", 0);
 		return test.insert(tableName, fields);
 	}
 
@@ -60,7 +70,7 @@ public class SimpleTransact implements Workload {
 		ScenarioExecutor<Void> executor = new ScenarioExecutor<Void>(threads);
 
 		for (int n = 1; n <= threads; n++) {
-			int delta = n % 2 == 1 ? 1 : -1;
+			int delta = 1;
 			executor.addTask(new TransactTask(test, key, delta, repeat, true, tableName));
 			System.out.println("Added task:" + n + " delta:" + delta);
 		}
@@ -108,6 +118,7 @@ public class SimpleTransact implements Workload {
 						db.put(tableName, key, entity);
 
 						db.commitTransaction();
+						verifyCounter.addAndGet(1);
 						repeat--;
 						System.out.println("Updated " + delta + " entity:" + key + " number:" + entity.get("number"));
 					} else {
@@ -115,6 +126,8 @@ public class SimpleTransact implements Workload {
 						db.rollbackTransaction();
 					}
 				} catch (RuntimeException re) {
+					collisions.addAndGet(1);
+
 //					re.printStackTrace();
 					System.out.println("Collision: " + re.getMessage());
 					db.rollbackTransaction();

@@ -7,6 +7,7 @@ import com.orientechnologies.orient.core.id.ORecordId;
 import com.orientechnologies.orient.core.metadata.schema.OClass;
 import com.orientechnologies.orient.core.metadata.schema.OSchema;
 import com.orientechnologies.orient.core.metadata.schema.OType;
+import com.orientechnologies.orient.core.record.ORecord;
 import com.orientechnologies.orient.core.record.impl.ODocument;
 import com.orientechnologies.orient.core.sql.query.OSQLSynchQuery;
 
@@ -99,21 +100,26 @@ public class OrientDb extends Database {
 		for (Map.Entry<String, Object> field : fields.entrySet()) {
 			doc.field(field.getKey(), field.getValue());
 		}
-		ORID orid = db.save(doc).getIdentity();
-		return fromORID(orid);
+		ORecord record = db.save(doc);
+		ORID orid = record.getIdentity();
+		return fromORID(record);
 	}
 
 	@Override
 	public Map<String, Object> get(String key) {
 		ODatabaseDocumentTx db = threadInit();
-		ODocument doc = db.load(toORID(key));
+		ODocument oldDoc = new ODocument();
+		oldDoc.fromJSON(key);
+		ODocument doc = db.load(oldDoc);
 		return doc.toMap();
 	}
 
 	@Override
 	public void put(String tableName, String key, Map<String, Object> fields) {
 		ODatabaseDocumentTx db = threadInit();
-		ODocument doc = db.load(toORID(key), null, true);
+		ODocument oldDoc = new ODocument();
+		oldDoc.fromJSON(key);
+		ODocument doc = db.load(oldDoc, null, true);
 		for (Map.Entry<String, Object> field : fields.entrySet()) {
 			doc.field(field.getKey(), field.getValue());
 		}
@@ -123,8 +129,9 @@ public class OrientDb extends Database {
 	@Override
 	public void delete(String tableName, String key) {
 		ODatabaseDocumentTx db = threadInit();
-		ORID orid = toORID(key);
-		db.delete(orid);
+		ODocument oldDoc = new ODocument();
+		oldDoc.fromJSON(key);
+		db.delete(oldDoc);
 	}
 
 	@Override
@@ -234,21 +241,14 @@ public class OrientDb extends Database {
 		}
 	}
 
-	private ORID toORID(String oridString) {
-		int separatorIndex = oridString.indexOf('#');
-		int clusterId = Integer.valueOf(oridString.substring(0, separatorIndex));
-		int clusterPosition = Integer.valueOf(oridString.substring(separatorIndex + 1));
-		return new ORecordId(clusterId, clusterPosition);
-	}
-
-	private String fromORID(ORID orid) {
-		return orid.getClusterId() + "#" + orid.getClusterPosition();
+	private String fromORID(ORecord record) {
+		return record.toJSON();
 	}
 
 	private Map<String /*key*/, Map<String, Object> /*fields*/> queryResultToMap(List<ODocument> results) {
 		Map<String /*key*/, Map<String, Object> /*fields*/> out = new HashMap<>(results.size());
 		for (ODocument result : results) {
-			out.put(fromORID(result.getIdentity()), result.toMap());
+			out.put(fromORID(result), result.toMap());
 		}
 		return out;
 	}

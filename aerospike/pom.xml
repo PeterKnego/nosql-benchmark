@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/maven-v4_0_0.xsd">
+    <parent>
+        <groupId>net.nosql_benchmark</groupId>
+        <artifactId>parent</artifactId>
+        <version>1.0-SNAPSHOT</version>
+    </parent>
+    <modelVersion>4.0.0</modelVersion>
+
+    <artifactId>aerospike</artifactId>
+
+    <properties>
+        <aerospike.version>2.0</aerospike.version>
+    </properties>
+
+    <dependencies>
+        <dependency>
+            <groupId>net.nosql_benchmark</groupId>
+            <artifactId>benchmark</artifactId>
+            <version>1.0-SNAPSHOT</version>
+        </dependency>
+
+        <dependency>
+    <groupId>com.aerospike</groupId>
+    <artifactId>aerospike-client</artifactId>
+    <version>[3.0.0,)</version>
+  </dependency>
+    </dependencies>
+</project>
